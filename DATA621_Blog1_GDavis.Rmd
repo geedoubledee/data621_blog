@@ -1,0 +1,45 @@
+---
+title: "DATA621 - Blog 1"
+author: "Glen Dale Davis"
+date: "2023-11-26"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+```
+
+```{r packages, warning = FALSE, message = FALSE}
+library(tidyverse)
+library(mice)
+library(VIM)
+
+```
+
+## KNN Imputation vs. Multiple Imputation
+
+When imputing missing values in a dataset, it is important that the values be at least Missing at Random (MAR), if not Missing Completely at Random (MCAR). The main difference is: if the probability of the data being missing depends on observed information, but not unobserved variables, the data is MAR; if instead the probability of the data being missing is not dependent on either observed information or unobserved variables, the data is MCAR. Missing data that doesn't fall under either of these umbrellas is labelled Missing Not at Random (MNAR), and imputing MNAR data will likely introduce bias into the data.
+
+If the data is at least MAR, and we've chosen to impute it, we have another choice to make: the method of imputation. Instead of always using the same method, and assuming it will work just as well on the next dataset as it did on the last dataset we were working with, I have found that we can actually compare performance across imputation methods and choose the better performer.
+
+To demonstrate, we load the `swiss` dataset from the `datasets` package and replace 20 percent of the data for each variable with `NA` values. 
+
+```{r data}
+data(swiss)
+set.seed(400)
+n <- floor(.2 * nrow(swiss))
+cols <- colnames(swiss)
+introduce_na_vals <- function(x, n){
+    copy <- x
+    copy[sample(length(x), n)] <- NA
+    copy
+}
+swiss_na <- swiss |>
+    mutate(across(all_of(cols), ~ introduce_na_vals(.x, n)))
+
+```
+
+
+
+
