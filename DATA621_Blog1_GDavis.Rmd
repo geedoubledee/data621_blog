@@ -14,32 +14,61 @@ knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(mice)
 library(VIM)
+library(knitr)
 
 ```
 
-## KNN Imputation vs. Multiple Imputation
+## Handling Missing Data: KNN Imputation vs. Multiple Imputation
 
 When imputing missing values in a dataset, it is important that the values be at least Missing at Random (MAR), if not Missing Completely at Random (MCAR). The main difference is: if the probability of the data being missing depends on observed information, but not unobserved variables, the data is MAR; if instead the probability of the data being missing is not dependent on either observed information or unobserved variables, the data is MCAR. Missing data that doesn't fall under either of these umbrellas is labelled Missing Not at Random (MNAR), and imputing MNAR data will likely introduce bias into the data.
 
-If the data is at least MAR, and we've chosen to impute it, we have another choice to make: the method of imputation. Instead of always using the same method, and assuming it will work just as well on the next dataset as it did on the last dataset we were working with, I have found that we can actually compare performance across imputation methods and choose the better performer.
+If the data is at least MAR, and we've chosen to impute it, we have another choice to make: the method of imputation. Instead of always using the same method, and assuming it will work just as well on the next dataset as it did on the last dataset we were working with, we can actually compare performance across imputation methods and choose the better performer.
 
-To demonstrate, we load the `swiss` dataset from the `datasets` package and replace 20 percent of the data for each variable with `NA` values. 
+To demonstrate, we:
+
+* load the `swiss` dataset from the `datasets` package
+
+* replace 20 percent of the data for each variable with `NA` values
+
+* perform KNN Imputation using the `VIM` package (k = 15)
+
+* perform Multiple Imputation using the `mice` package (method = "pmm" | predictive mean matching)
+
+* evaluate performance using Root Mean Squared Error (RMSE)
+
 
 ```{r data}
 data(swiss)
 set.seed(400)
-n <- floor(.2 * nrow(swiss))
 cols <- colnames(swiss)
-introduce_na_vals <- function(x, n){
-    copy <- x
-    copy[sample(length(x), n)] <- NA
+introduce_na_vals <- function(col, p){
+    copy <- col
+    l <- length(copy)
+    n <- floor(p * l)
+    copy[sample(l, n)] <- NA
     copy
 }
 swiss_na <- swiss |>
-    mutate(across(all_of(cols), ~ introduce_na_vals(.x, n)))
+    mutate(across(all_of(cols), ~ introduce_na_vals(.x, p = 0.2)))
+x <- colSums(is.na(swiss_na))
+missing_val_cols <- names(x[x > 0])
+swiss_imp_knn <- swiss_na |>
+    VIM::kNN(variable = missing_val_cols, k = 15, imp_var = FALSE)
+init = mice(swiss_na, maxit=0) 
+meth = init$method
+predM = init$predictorMatrix
+meth[missing_val_cols] = "pmm" #Predictive mean matching
+imp <- mice(swiss_na, method = meth, predictorMatrix = predM, m = 5,
+                       printFlag = FALSE)
+swiss_imp_mice <- complete(imp)
+a <- sqrt(colMeans((swiss_imp_knn - swiss)^2, na.rm = TRUE))
+b <- sqrt(colMeans((swiss_imp_mice - swiss)^2, na.rm = TRUE))
+rmse <- as.data.frame(rbind(a, b))
+rownames(rmse) <- c("RMSE: KNN", "RMSE: MICE")
+kable(rmse, format = "simple")
 
 ```
 
+Here, we see that KNN Imputation performed better on three of the variables, while Multiple Imputation performed better on the other three variables. Next steps to find the optimal performer might be to tweak the value for k used in KNN Imputation or try a different method in Multiple Imputation. (It is even possible to set a different `mice` imputation method for each variable.)
 
-
-
+This very rudimentary evaluation based solely on RMSE is widely used, I believe, but Stef van Buuren makes a case against it in [section 2.6 of *Flexible Imputation of Missing Data*](https://stefvanbuuren.name/fimd/sec-true.html). They provide alternative metrics to consider in the previous section (2.5), but their code unfortunately doesn't work as written. So while I found their argument convincing and wanted to explore it further, I sadly couldn't replicate their process here.
