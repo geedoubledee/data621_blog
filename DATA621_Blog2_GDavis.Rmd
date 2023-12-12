@@ -11,13 +11,37 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ```{r packages, warning = FALSE, message = FALSE}
 library(tidyverse)
+library(cowplot)
+library(RColorBrewer)
 
 ```
 
 ## Dealing with Outliers: Winsorization vs. List-wise Deletion
 
 ```{r data}
-summary(cars)
+data(faithful)
+theme_set(theme_classic())
+palette <- brewer.pal(n = 12, name = "Paired")
+col <- palette[c(2, 8)]
+outlier <- c(7.204, 80, 1)
+names(outlier) <- c("eruptions", "waiting", "outlier_ind")
+faithful_w_outlier <- faithful |>
+    mutate(outlier_ind = 0) |>
+    bind_rows(outlier) |>
+    mutate(outlier_ind = as.factor(outlier_ind))
+p1a <- faithful |>
+    ggplot() +
+    geom_point(aes(x = waiting, y = eruptions), color = col[1]) +
+    geom_smooth(method = "lm", color = palette[6])
+p1b <- faithful_w_outlier |>
+    ggplot(aes(color = outlier_ind, shape = outlier_ind)) +
+    geom_point(aes(x = waiting, y = eruptions)) +
+    scale_color_manual(values = col) +
+    theme(legend.position = "none")
+p1 <- plot_grid(p1a, p1b, ncol = 2)
+p1
 
 ```
+
+
 
