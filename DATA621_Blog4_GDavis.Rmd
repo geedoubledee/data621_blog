@@ -10,12 +10,39 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 ```{r packages, warning = FALSE, message = FALSE}
+library(tidyverse)
+library(ggcorrplot)
+library(RColorBrewer)
 
 ```
 
 ## Highly Correlated Categorical Predictors:
 
-```{r }
+Product data can have many categorical variables. The last publisher I worked for published both children's and adult books, and among the children's books, some formats were exclusively produced for particular age groups. Also, some of those age groups didn't have a wide variety of formats published for them. So for children's books, some levels of an "Age Range" factor might be highly correlated with some levels of a "Format" factor. For adult books, some levels of a "Format" factor could similarly be highly correlated with levels of a "Genre" factor. The thriller/mystery genre represented quite a large portion of audiobooks published when that format first emerged, for instance. The romance genre is one of the most prevalent genres that is still published in mass market format, as another example. 
 
+Some plots designed to visualize correlations among predictors (and the response) exclude non-numeric variables, either by default or completely. However, we can one-hot encode all non-numeric variables in a dataset using the `model.matrix` function from the `stats` package, and then we can visualize the correlations between factor levels using the `ggcorrplot` function from the package of the same name. An additional trick we may sometimes need to employ is setting a correlation threshold. With many categorical variables, or even just a few with many levels, readability often becomes a concern in a correlation plot. Setting an absolute value correlation threshold allows us to visualize only the stronger relationships among factor levels, and the threshold can often be relatively low (0.05) and still be effective at decluttering the visualization.
+
+We demonstrate building a partial correlation plot for the `mtcars` dataset, which has several discrete numeric variables that could make sense to coerce to factors for analysis. We use a correlation threshold of 0.5 for this example so we can talk about highly correlated factor levels only, but again you mainly need this threshold to zoom in on plots that would otherwise be hard to read. I often let the plot generate messily first, then see how low I can set the threshold to make the plot readable. 
+
+```{r }
+data(mtcars)
+mtcars <- mtcars |>
+    mutate(cyl = as.factor(cyl),
+           vs = as.factor(vs),
+           am = as.factor(am),
+           gear = as.factor(gear),
+           carb = as.factor(carb))
+palette <- brewer.pal(n = 7, name = "RdBu")[c(1, 4, 7)]
+r <- model.matrix(~0+., data = mtcars) |>
+    cor(use = "pairwise.complete.obs")
+is.na(r) <- abs(r) < 0.5
+r |>
+    ggcorrplot(show.diag = FALSE, type = "lower", lab = TRUE, lab_size = 3,
+               tl.cex = 10, tl.srt = 90,
+               colors = palette, outline.color = "white")
 
 ```
+
+Here we can immediately see some interesting things: having 8 cylinders (cyl8) is highly negatively correlated with having a straight engine (vs1); having 4 cylinders (cyl4) is highly positively correlated with having a straight engine (vs1); having 4 forward gears (gear4) is pretty positively correlated with having 4 cylinders (cyl4); and having 5 forward gears (gear5) is pretty positively correlated with having a manual transmission (am1).
+
+So some of these variables cover the same information. When modeling book sales, I might check correlations with the response, include all variables in a full model, eliminate statistically insignificant variables, then measure the variance inflation factors of the remaining variables to see if any other variables should be removed. Many times, checking the variance inflation factors will reveal that you need to remove one or more of the highly correlated variables you've already identified. I tend to start eliminations with the variables that are least correlated with the response and most correlated with another variable that is more correlated with the response.
