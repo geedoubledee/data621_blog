@@ -9,7 +9,7 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## A Use Case for Multinomial Logstic Regression:
+## ???
 
 ```{r cars}
 summary(cars)

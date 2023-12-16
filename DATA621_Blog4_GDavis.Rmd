@@ -9,9 +9,13 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## Diagnostic Plots for Binomial Logistic Regression:
+```{r packages, warning = FALSE, message = FALSE}
 
-```{r cars}
-summary(cars)
+```
+
+## Highly Correlated Categorical Predictors:
+
+```{r }
+
 
 ```

@@ -9,9 +9,56 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## Autocorrelation
-
-```{r cars}
-summary(cars)
+```{r packages, warning = FALSE, message = FALSE}
+library(tidyverse)
+library(car)
 
 ```
+
+## Autocorrelation:
+
+Autocorrelation describes how related a variable's current value is to its past values. Some time series data demonstrate more autocorrelation than others, and it's possible to exhibit none. For example, when the last publishing company I worked for would launch a new book, week-over-week sales tended to grow for a while after the launch, but as soon as those sales started to decline, they would usually keep declining until they leveled off. Gain was followed by gain up until a pivot point, and then loss was followed by loss until stasis. Some books might have longer positive runs, less steep declines, or what-have-you, but some autocorrelation is going to exist for any book's week-over-week sales.
+
+While linear regression might not be the most useful way to analyze time series data such as the week-over-week book sales I mentioned above, one way to test for autocorrelation when you are doing linear regression on time series data is to perform a Durbin-Watson test. This test returns two particularly helpful pieces of information: the D-W statistic and a bootstrapped p-value. The D-W statistic ranges from 0 to 4 and can be interpreted thusly:
+
+* Values Closer to 0: Stronger Positive Autocorrelation
+
+* Values Closer to 2: Weak Autocorrelation
+
+* Values Closer to 4: Stronger Negative Autocorrelation
+
+A corresponding significant (less than 0.05) bootstrapped p-value indicates autocorrelated data. 
+
+To demonstrate determining autocorrelation, first we:
+
+* load the `ChickWeight` dataset
+
+* plot `weight` ~ `Time` faceted by `Diet` for all chicks
+
+Since the `ChickWeight` dataset measures the effect of diet on the early growth of chicks, and chicks tend to gain weight over time, we expect strong positive autocorrelation generally. We can visually assess some differences between the four diets and chicks' weight gain over time below, but we see nothing that would lead us to reconsider our expectations.
+
+```{r }
+data(ChickWeight)
+p <- ChickWeight |>
+    ggplot(aes(x = Time, y = weight)) +
+    geom_line(aes(color = Chick)) +
+    theme_classic() +
+    theme(legend.position = "none") +
+    facet_wrap(~ Diet)
+p
+
+```
+
+Next we:
+
+* fit a linear model of `weight` ~ `Time` + `Diet` to the data
+
+* perform a Durbin-Watson test on this model using the `durbinWatsonTest()` from the `car` package
+
+```{r }
+model1 <- lm(weight ~ Time + Diet, data = ChickWeight)
+durbinWatsonTest(model1)
+
+```
+
+There is strong positive autocorrelation as expected. Our textbook went over methods to deal with autocorrelation, including using the `gls` function from the `nlme` package. This generalized least squares model function allows the errors to be correlated and/or have unequal variances. However, in many situations, I prefer the flexibility of methods that are specific to time series analysis. 
