@@ -16,32 +16,80 @@ library(RColorBrewer)
 
 ```
 
-## Dealing with Outliers: Winsorization vs. List-wise Deletion
+## Dealing with Outliers: Winsorization
 
-```{r data}
+Outliers make finding relationships between predictor and response variables more difficult. In data produced by the last publishing company I worked for, I was often able to spot erroneous outliers, i.e. those that I could definitively state were wrong and find the correct data points for or simply delete. For instance, sometimes artificially low sales would be reported for a new book because someone looked at data for the wrong format (i.e. a cheap paperback edition distributed only in select international markets instead of the main hardcover edition). Another error that would commonly produce outliers was when sales were manually "rolled up" for a book. When sales for a book are rolled up, units or dollars sold for all formats are aggregated into one or more umbrella categories (i.e. all print sales, all digital sales, all audio sales, etc.). There are often special editions of a book that people want to exclude when looking at rolled up sales, and that can be a very manual process susceptible to human error. Many books have no special editions, while others might have twenty, and they are never named or tagged consistently in my experience. But familiarity with the kinds of errors that were common in our data gave me confidence to make corrections and deletions as needed. 
+
+When presented with unfamiliar data, we should be less confident in our ability to correct or delete data points, and therefore more cautious. If we can't make a definitive statement about why the outliers exist after investigating them, there is one particular method I favor over list-wise deletion, and that is [winsorization](https://towardsdatascience.com/detecting-and-treating-outliers-in-python-part-3-dcb54abaf7b0). Winsorizing data is replacing any value of a variable above or below percentile $k$ with the value of the $k^{th}$ percentile itself. When using the standard $k$ of 5, for example, outliers below the 5th percentile are replaced with the value of the 5th percentile, and outliers above the 95th percentile are replaced with the value of the 95th percentile. This method reduces the influence of outliers without losing as much information as we do from list-wise deletion. 
+
+To demonstrate winsorization, we:
+
+* load data from the `faithful` dataset
+
+* introduce one outlier on the low end and two outliers on the high end
+
+* plot the loess curves for the original data vs. the data with outliers introduced
+
+* replot the loess curves once the outliers we introduced have been winsorized
+
+```{r data, warning = FALSE, message = FALSE}
 data(faithful)
 theme_set(theme_classic())
 palette <- brewer.pal(n = 12, name = "Paired")
 col <- palette[c(2, 8)]
-outlier <- c(7.204, 80, 1)
-names(outlier) <- c("eruptions", "waiting", "outlier_ind")
+outliers <- as.data.frame(rbind(c(0.305, 51, 1),
+                                c(7.206, 100, 1),
+                                c(6.930, 98, 1)))
+names(outliers) <- c("eruptions", "waiting", "outlier_ind")
 faithful_w_outlier <- faithful |>
     mutate(outlier_ind = 0) |>
-    bind_rows(outlier) |>
+    bind_rows(outliers) |>
     mutate(outlier_ind = as.factor(outlier_ind))
-p1a <- faithful |>
-    ggplot() +
-    geom_point(aes(x = waiting, y = eruptions), color = col[1]) +
-    geom_smooth(method = "lm", color = palette[6])
-p1b <- faithful_w_outlier |>
-    ggplot(aes(color = outlier_ind, shape = outlier_ind)) +
-    geom_point(aes(x = waiting, y = eruptions)) +
+pa <- faithful |>
+    ggplot(aes(x = waiting, y = eruptions)) +
+    geom_point(color = col[1]) +
+    geom_smooth(method = "loess", color = palette[6], se = FALSE) +
+    scale_y_continuous(limits = c(0, 7.5), breaks = seq(0, 7.5, 0.5)) +
+    scale_x_continuous(limits = c(40, 100), breaks = seq(40, 100, 10))
+pb <- faithful_w_outlier |>
+    ggplot(aes(x = waiting, y = eruptions)) +
+    geom_point(aes(color = outlier_ind, shape = outlier_ind)) +
+    geom_smooth(method = "loess", color = palette[6], se = FALSE) +
+    scale_y_continuous(limits = c(0, 7.5), breaks = seq(0, 7.5, 0.5)) +
+    scale_x_continuous(limits = c(40, 100), breaks = seq(40, 100, 10)) +
     scale_color_manual(values = col) +
     theme(legend.position = "none")
-p1 <- plot_grid(p1a, p1b, ncol = 2)
+pc <- plot_grid(pa, pb, ncol = 2)
+title_str <- "See How Outliers Distort the Loess Curve Before Winsorization"
+title <- ggdraw() + draw_label(title_str, fontface='bold')
+p1 <- plot_grid(title, pc, ncol=1, rel_heights=c(0.1, 1))
 p1
 
 ```
 
+```{r warning = FALSE, message = FALSE}
+faithful_winsorized <- faithful_w_outlier |>
+    mutate(eruptions = case_when(
+        eruptions > quantile(eruptions, probs = 0.95) ~ quantile(eruptions,
+                                                                 probs = 0.95),
+        eruptions < quantile(eruptions, probs = 0.05) ~ quantile(eruptions,
+                                                                 probs = 0.05),
+        TRUE ~ eruptions))
+pd <- faithful_winsorized |>
+    ggplot(aes(x = waiting, y = eruptions)) +
+    geom_point(aes(color = outlier_ind, shape = outlier_ind)) +
+    geom_smooth(method = "loess", color = palette[6], se = FALSE) +
+    scale_y_continuous(limits = c(0, 7.5), breaks = seq(0, 7.5, 0.5)) +
+    scale_x_continuous(limits = c(40, 100), breaks = seq(40, 100, 10)) +
+    scale_color_manual(values = col) +
+    theme(legend.position = "none")
+title_str <- "See How the Loess Curve Improves After Winsorization"
+title <- ggdraw() + draw_label(title_str, fontface='bold')
+pe <- plot_grid(pb, pd, ncol = 2)
+p2 <- plot_grid(title, pe, ncol=1, rel_heights=c(0.1, 1))
+p2
 
+```
+
+The winsorized outliers still represent low and high data points, but they have much less influence on the loess curve now. Like all methods of handling outliers, this method is best performed with ample documentation, and it may make more sense in some situations than others. 
 
