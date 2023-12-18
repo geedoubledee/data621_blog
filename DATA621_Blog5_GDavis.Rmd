@@ -9,9 +9,73 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## ???
-
-```{r cars}
-summary(cars)
+```{r packages, warning = FALSE, message = FALSE}
+library(tidyverse)
+library(fivethirtyeight)
+library(elasticnet)
+library(knitr)
+library(caret)
 
 ```
+
+## Feature Importance & Selection:
+
+Product data might have more features than you can thoroughly analyze manually, so automatic feature selection is sometimes necessary. At the last book publishing company I worked for, some of our older systems only displayed a limited amount of information about our books, so analysis could be done relatively quickly. As our systems were being upgraded, however, one category of data that kept expanding was content metadata (for instance, what school subjects a teacher could use this book in curriculum for, the book's reading level, what time period the book covered, what season(s) it was set in, what state(s) it was set in, etc.). Different markets buy books for all kinds of reasons, and the company wanted sales reps aware of as much information as possible that could help them sell a book into their market. The more features a book has though, the more cluttered what features influence a book's sales the most can become. 
+
+One way of attempting to measure feature importance and perform automatic feature selection is training a lasso model on the data. The lasso model uses a fixed ridge-regression penalty (lambda) of 0 and a lasso penalty, which penalizes a model according to the sum of the absolute values of weights in it. As such, a final tuned lasso model is usually one in which many of the less important features have all been given zero weight.
+
+To demonstrate measuring feature importance and selecting features automatically using a tuned lasso model, we:
+
+* load the `candy_rankings` dataset from the `fivethirtyeight` package, which has enough features to demonstrate the point, and in which it might not be obvious which features play the biggest parts in a candy's rank
+
+* train a lasso model to determine the ideal tuning parameters after centering/scaling the data
+
+* display a summary of the ten most important features according to the best tuned model
+
+A summary of the ideal tuning parameters and R-Squared value for the trained lasso model is below:
+
+```{r warning = FALSE, message = FALSE}
+data(candy_rankings)
+train_lasso <- candy_rankings |>
+    select(-competitorname)
+lassoGrid <- expand.grid(.lambda = c(0),
+                         .fraction = seq(.05, 1, length = 20))
+ctrl <- trainControl(method = "cv", number = 10)
+lassoTune <- train(as.matrix(train_lasso |> select(-winpercent)),
+                   as.numeric(train_lasso$winpercent),
+                   method = "enet",
+                   tuneGrid = lassoGrid,
+                   trControl = ctrl,
+                   preProc = c("center", "scale"))
+lasso_summ <- c("Lasso",
+             lassoTune$bestTune$lambda,
+             lassoTune$bestTune$fraction,
+             round(lassoTune$results |>
+                 filter(fraction == lassoTune$bestTune$fraction) |>
+                 select(Rsquared) |> as.numeric(), 4))
+lasso_summ <- as.data.frame(t(lasso_summ))
+cols <- c("Model", "lambda", "lasso penalty", "R-Squared")
+colnames(lasso_summ) <- cols
+knitr::kable(lasso_summ, format = "simple")
+
+```
+
+A summary of the estimated feature importance for the ten most important features in this tuned lasso model is below:
+
+```{r warning = FALSE, message = FALSE}
+lasso_imp <- varImp(lassoTune)
+cols <- c("Predictor", "Importance")
+lasso_imp <- lasso_imp$importance |>
+    rownames_to_column()
+colnames(lasso_imp) <- cols
+lasso_imp <- lasso_imp |>
+    arrange(desc(Importance)) |>
+    top_n(10)
+knitr::kable(lasso_imp, format = "simple")
+
+```
+
+So we now know that whether a candy contains chocolate is very important to its rankings.
+
+This method extrapolates well to honing in on the most important features for all kinds of products, so it would be very useful when analyzing books with lots of metadata, like I mentioned previously. 
+
